@@ -1,6 +1,7 @@
-
 ## zuvor !pip install plotly
 ## ggf. auch !pip install nbformat
+import numpy as np
+import pandas as pd
 import plotly.express as px
 import plotly.io as pio
 pio.renderers.default = "browser"
@@ -9,7 +10,7 @@ def read_my_csv():
     # Einlesen eines Dataframes
     ## "\t" steht für das Trennzeichen in der txt-Datei (Tabulator anstelle von Beistrich)
     ## header = None: es gibt keine Überschriften in der txt-Datei
-    df = pd.read_csv("data/activities/activity.csv")
+    df = pd.read_csv("data/activities/activity.csv")# richtige Daten müssen noch eingelsen werden
 
     t_end= len(df)
     time = np.arange(0, t_end)
