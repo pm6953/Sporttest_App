@@ -44,19 +44,18 @@ class EKGdata:
         peak_df = self.df.iloc[peaks]
 
     # Plot erstellen
-        plt.figure(figsize=(12, 5))
-        plt.plot(df_plot["Zeit in ms"], df_plot["Messwerte in mV"], label="EKG-Signal")
-        plt.scatter(peak_df["Zeit in ms"], peak_df["Messwerte in mV"], color='red', label="Peaks")
+        fig, ax = plt.subplots(figsize=(12, 5))
+        ax.plot(df_plot["Zeit in ms"], df_plot["Messwerte in mV"], label="EKG-Signal")
+        ax.scatter(peak_df["Zeit in ms"], peak_df["Messwerte in mV"], color='red', label="Peaks")
 
-        plt.xlabel("Zeit in ms")
-        plt.ylabel("Messwerte in mV")
-        plt.title("EKG Zeitreihe mit Peaks")
-        plt.legend()
-        plt.grid(True)
+        ax.set_xlabel("Zeit in ms")
+        ax.set_ylabel("Messwerte in mV")
+        ax.set_title("EKG Zeitreihe mit Peaks")
+        ax.legend()
+        ax.grid(True)
         plt.tight_layout()
 
-    # Zeige den Plot direkt im Fenster
-        plt.show()
+        return fig 
 
     def find_peaks(self, threshold, respacing_factor=5):
         series=self.df['Messwerte in mV']
