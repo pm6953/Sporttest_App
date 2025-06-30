@@ -1,18 +1,19 @@
 import streamlit as st
 from read_ekgdata import EKGdata
 from read_persondata import Person
+from read_fitfile import FTP_Test
 import json
 from PIL import Image
 import os
 from datetime import date
 import pandas as pd
-import matplotlib.pyplot as plt # Füge dies hinzu, da du Matplotlib für EKG-Plots verwendest!
+import matplotlib.pyplot as plt 
 
-st.set_page_config(layout="centered") # Set layout to centered for a more compact look if desired
+st.set_page_config(layout="centered") # Layout in der Mitte
 
 st.title("Sporttest-App")
 
-# Initialisiere ALLE Session State Variablen GANZ AM ANFANG DES SKRIPTS
+# Initialisiere aller Session State Variablen 
 if 'show_new_person_form' not in st.session_state:
     st.session_state['show_new_person_form'] = False
 if 'confirm_delete_id' not in st.session_state:
@@ -161,7 +162,7 @@ with tabs[0]:
         )
 
     with col_add_button:
-        # "+" Button to add a new person
+        # "+" Button um eine neue Person hinzuzufügen
         add_new = st.button("➕", help="Neue Person hinzufügen", key="add_new_person_button_main")
         if add_new:
             st.session_state['show_new_person_form'] = True
@@ -264,8 +265,6 @@ with tabs[0]:
                     st.session_state['show_person_details'] = True # Show details of the newly added person
 
     # Logik für die Anzeige von Personendetails und den Lösch-Button
-    # This condition needs to be more robust, should only show details if a person is selected AND not adding new.
-    # We use a dedicated session state for this.
     selected_person_name_data_tab = st.session_state.get('person_select_box', '') # Holen wir die Person hier für diesen Tab
 
     if selected_person_name_data_tab and not st.session_state['show_new_person_form']:
@@ -278,12 +277,9 @@ with tabs[0]:
             col_img, col_info = st.columns([1, 2])
 
             with col_img:
-                st.write("### Bild") # Placeholder for "Bild"
+                #st.write("### Bild") # Placeholder for "Bild"
                 picture_path = person.picture_path
                 if not picture_path or not os.path.isfile(picture_path):
-                    # You might want a default placeholder image here
-                    # For now, let's just show a blank space or a generic image
-                    # st.image("placeholder.png", use_container_width=True) # If you have a placeholder image
                     st.write("_(Kein Bild vorhanden)_") # Text placeholder
                 else:
                     image = Image.open(picture_path)
@@ -342,7 +338,7 @@ with tabs[0]:
             st.session_state['show_person_details'] = False
 
 
-    # Initial message when nothing is selected and no other state is active
+    # Anfangsnachricht, wenn nichts ausgewählt ist und kein anderer Zustand aktiv ist
     if not st.session_state['person_select_box'] and \
        not st.session_state['show_new_person_form'] and \
        not st.session_state['person_added_message'] and \
@@ -354,7 +350,7 @@ with tabs[0]:
 # Tests
 with tabs[1]:
     st.header("Ruhe-EKG")
-    # ZUERST: selected_person_name_test_tab definieren, damit person_data abgerufen werden kann
+    # selected_person_name_test_tab definieren, damit person_data abgerufen werden kann
     selected_person_name_test_tab = st.session_state.get('person_select_box', '')
 
     if selected_person_name_test_tab: # Nur fortfahren, wenn eine Person ausgewählt ist
@@ -385,7 +381,7 @@ with tabs[1]:
                         threshold = ekg.auto_threshold()
                         st.write(f"Automatisch berechneter Schwellenwert für Peaks: {threshold:.2f}")  # .2f = Float mit 2 Dezimalstellen
 
-                        # Herzfrequenz schätzen und anzeigen
+                        # Herzfrequenz schätzen und anzeigen -> muss noch geändert werden
                         hr = ekg.estimate_hr(threshold=threshold)
                         if hr is not None:
                             st.metric("Geschätzte Herzfrequenz (bpm)", hr)
@@ -393,10 +389,10 @@ with tabs[1]:
                             st.warning("Nicht genügend Peaks zur Herzfrequenz-Berechnung gefunden.")
 
                         # Plot erstellen und anzeigen
-                        # KORREKTUR: Das Figure-Objekt von plot_time_series() abfangen und an st.pyplot übergeben
-                        fig_to_display = ekg.plot_time_series(threshold=threshold) # Optional threshold übergeben, falls deine Methode das kann
-                        st.pyplot(fig_to_display) # <-- HIER WIRD ST.PYPLOT VERWENDET
-                        plt.close(fig_to_display) # Wichtig: Schließe die Matplotlib-Figur, um Speicherlecks zu vermeiden
+                        # Das Figure-Objekt von plot_time_series() abfangen und an st.pyplot übergeben
+                        fig_to_display = ekg.plot_time_series(threshold=threshold) # threshold übergeben(Optional)
+                        st.pyplot(fig_to_display) #  ST.PYPLOT 
+                        plt.close(fig_to_display) #  Schließen der Matplotlib-Figur, um Speicherlecks zu vermeiden
 
                     except Exception as e:
                         st.error(f"Fehler beim Laden des EKG-Tests: {e}")
@@ -412,6 +408,43 @@ with tabs[1]:
 
 with tabs[2]:
     st.header("Stufentest Fahrradergometer")
+    # selected_person_name_test_tab definieren, damit person_data abgerufen werden kann
+    selected_person_name_test_tab = st.session_state.get('person_select_box', '')
+
+    if selected_person_name_test_tab: # Nur fortfahren, wenn eine Person ausgewählt ist
+        person_data_test_tab = Person.find_person_data_by_name(selected_person_name_test_tab)
+        
+        if person_data_test_tab: # Prüfen, ob die Personendaten gefunden wurden
+            ftp_tests = person_data_test_tab.get("ftp_tests", [])
+
+            if ftp_tests: # Nur wenn FTP-Tests vorhanden sind
+                # FTP-Tests nach ID absteigend sortieren (neueste zuerst)
+                ftp_tests_sorted = sorted(ftp_tests, key=lambda x: x['id'], reverse=True)
+
+                ftp_test_options = [f"FTP ID {test['id']} - {test['date']}" for test in ftp_tests_sorted]
+
+                # Standardmäßig neuester EKG-Test ausgewählt (höchste ID)
+                selected_ftp_test = st.selectbox( "EKG-Test auswählen", ftp_test_options, index=0)
+
+                if selected_ftp_test:
+                    # EKG-Test ID extrahieren
+                    ftp_test_id = int(selected_ftp_test.split()[2])
+                    try:
+                        ftp = FTP_Test.load_by_id(ftp_test_id, persons_list)
+
+                        st.write(f"### FTP-Test geladen: Test-ID {ftp.id}, Datum: {ftp.date}")
+                        st.write(f"Person: {ftp.person_firstname} {ftp.person_lastname}")
+
+                        
+                    except Exception as e:
+                        st.error(f"Fehler beim Laden des FTP-Test: {e}")
+            else:
+                st.info("Für die ausgewählte Person sind keine FTP-Tests vorhanden.")
+        else:
+            st.warning("Die Daten zur ausgewählten Person konnten nicht gefunden werden. Bitte überprüfen Sie Ihre Auswahl.")
+    else:
+        st.info("Bitte wählen Sie zuerst eine Person im Tab 'Daten' aus, um FTP-Tests anzuzeigen.")
+
     st.write("Zusammenfassung")
     st.write("Datum des letzten Tests:")
     st.write("Gesamtdauer des Tests:")
@@ -464,7 +497,6 @@ with tabs[3]:
 
 
     # Funktion zum Stylen des DataFrames (für Zeilenfarben)
-    # KORRIGIERT: Muss für jede Spalte der Zeile einen Stil zurückgeben
     def highlight_zones(row): # Benenne den Parameter in 'row' um, um Klarheit zu schaffen
         colors = {
             "Zone 1": '#e6ffe6', # Hellgrün (Erholung)

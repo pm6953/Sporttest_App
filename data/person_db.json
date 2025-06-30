@@ -34,6 +34,13 @@
                 "date": "10.2.2023",
                 "result_link": "data/ekg_data/02_Ruhe.txt"
             }
+        ],
+        "ftp_test": [
+            {
+                "id": 1,
+                "date": "10.2.2023",
+                "result_link": "data/Stufentest_data/11129269515_ACTIVITY.fit"
+            }
         ]
     },
     {
@@ -49,6 +56,13 @@
                 "id": 4,
                 "date": "11.3.2023",
                 "result_link": "data/ekg_data/03_Ruhe.txt"
+            }
+        ],
+        "ftp_test": [
+            {
+                "id": 1,
+                "date": "16.8.2023",
+                "result_link": "data/Stufentest_data/6817599882_ACTIVITY.fit"
             }
         ]
     },
