@@ -1045,11 +1045,12 @@ with tabs[3]:
         # WICHTIG: Die Ausgabe sollte in 'latin-1' erfolgen, wenn Umlaute direkt ohne spezielle Font-Dateien verwendet werden
         # oder 'utf-8' wenn der FPDF Font diese unterstützt und zuvor geladen wurde (z.B. DejaVuSans)
         return bytes(pdf.output(dest='S'))
+    
 
 
 
     # Export-Button für PDF
-    if st.button("Trainingsplan als PDF exportieren"):
+    if st.button("PDF exportieren"):
         if selected_person_name:
             person_data = Person.find_person_data_by_name(selected_person_name)
             ftp_summary = {}
