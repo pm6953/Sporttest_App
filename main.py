@@ -3,6 +3,8 @@ from read_ekgdata import EKGdata
 from read_persondata import Person
 from fit_reader import FTP_Test
 import json
+import plotly.express as px
+import plotly.graph_objects as go
 from PIL import Image
 import os
 from datetime import date
@@ -38,6 +40,9 @@ if 'missing_optional_fields_message' not in st.session_state:
 # NEU: Variable, um festzuhalten, welche Person zuletzt HINZUGEFÜGT wurde
 if 'just_added_person_name' not in st.session_state:
     st.session_state['just_added_person_name'] = ""
+if 'show_edit_person_form' not in st.session_state:
+    st.session_state['show_edit_person_form'] = False
+
 
 
 # Initialisiere den Trainingsplan hier, direkt nach den anderen Session State Variablen
@@ -219,7 +224,7 @@ with tabs[0]:
     """, unsafe_allow_html=True)
     
     # Hauptinhaltsbereich des "Daten" Tabs
-    st.write("### Person auswählen:")
+    st.write("### Person:")
     col_select, col_add_button = st.columns([0.8, 0.2])
 
     # Bestimme den Standardindex der Selectbox
@@ -228,6 +233,7 @@ with tabs[0]:
         # Wenn eine Person gerade hinzugefügt wurde, diese auszuwählen
         target_selection = st.session_state['just_added_person_name']
         st.session_state['just_added_person_name'] = "" # Reset, um nicht dauerhaft diese Person zu erzwingen
+        
     else:
         target_selection = current_selected_name
     
@@ -239,13 +245,15 @@ with tabs[0]:
 
     with col_select:
         current_selection_from_widget = st.selectbox(
-            "_", 
-            options=[""] + person_names,
-            index=default_index, 
+            label="Person auswählen",
+            options=person_names,
+            index=None,
+            placeholder="Person auswählen",
             key="person_select_box",
-            label_visibility="hidden", # Versteckt das Label
-            on_change=on_person_select_change # Hinzugefügter Callback
-        )
+            on_change=on_person_select_change,
+            label_visibility="hidden"
+)
+
     
     with col_add_button:
         # Trick: Erzeuge einen leeren Platzhalter, der die Höhe eines Labels imitiert.
@@ -278,14 +286,26 @@ with tabs[0]:
             
             firstname = st.text_input("Vorname", key="new_person_firstname")
             lastname = st.text_input("Nachname", key="new_person_lastname")
-            birth_date = st.date_input("Geburtsdatum", value=date.today(), key="new_person_birthdate")
-            gender = st.selectbox("Geschlecht", ["male", "female"], key="new_person_gender")
+            birth_date = st.date_input(
+                "Geburtsdatum",
+                value=date(2000,1,1),
+                min_value=date(1940,1,1),
+                max_value=date.today(),
+                key="new_person_birthdate")
+            gender_options=["male","female"]
+            gender = st.selectbox(
+                "Geschlecht",
+                options=gender_options,
+                key="new_person_gender",
+                index=None,
+                placeholder="Geschlecht auswählen"
+                )
             address = st.text_input("Adresse", key="new_person_address") 
-            phone_number = st.text_input("Telefonnummer", key="new_person_phone_number")
+            phone_number = st.text_input("Telefonnummer (optional)", key="new_person_phone_number")
             st.markdown("### Optional: Dateien hochladen")
             picture_file = st.file_uploader("Profilbild hochladen ", type=["jpg", "jpeg", "png"], key="new_person_picture_file")
-            ruhe_ekg_file = st.file_uploader("Ruhe-EKG PDF", type=["pdf"], key="ruhe_ekg_upload")
-            ftp_test_file = st.file_uploader("FTP-Test PDF", type=["pdf"], key="ftp_test_upload")
+            ruhe_ekg_file = st.file_uploader("EKG-Datei hocladen (TXT oder CSV)", type=["txt","csv"], key="ruhe_ekg_upload")
+            ftp_test_file = st.file_uploader("FTP-Test hochladen (CSV oder FIT)", type=["csv","fit"], key="ftp_test_upload")
             
             submitted = st.form_submit_button("Person hinzufügen")
 
@@ -325,6 +345,31 @@ with tabs[0]:
                         with open(profile_picture_path, "wb") as f:
                             f.write(picture_file.getbuffer())
 
+                    # IDs für EKG und FTP Tests automatisch generieren
+                    existing_ekg_ids = [test["id"] for p in persons_list_current for test in p.get("ekg_tests", [])]
+                    existing_ftp_ids = [test["id"] for p in persons_list_current for test in p.get("ftp_tests", [])]
+                    new_ekg_id = max(existing_ekg_ids + [0]) + 1
+                    new_ftp_id = max(existing_ftp_ids + [0]) + 1
+
+                    # EKG Tests zuordnen, falls Datei vorhanden
+                    ekg_tests = []
+                    if ruhe_ekg_file is not None:
+                        ekg_tests.append({
+                            "id": new_ekg_id,
+                            "date": date.today().isoformat(),
+                            "result_link": ekg_file_path
+                        })
+
+                    # FTP Tests zuordnen, falls Datei vorhanden
+                    ftp_tests = []
+                    if ftp_test_file is not None:
+                        ftp_tests.append({
+                            "id": new_ftp_id,
+                            "date": date.today().isoformat(),
+                            "result_link": ftp_file_path
+                        })
+
+                    # Die neue Person mit allen zugehörigen Daten
                     neue_person = {
                         "id": new_id,
                         "firstname": firstname.strip(),
@@ -332,11 +377,14 @@ with tabs[0]:
                         "date_of_birth": birth_date.strftime("%Y-%m-%d"),
                         "gender": gender,
                         "address": address.strip(),
-                        "phone_number": phone_number.strip(), 
+                        "phone_number": phone_number.strip(),
                         "picture_path": profile_picture_path,
                         "ruhe_ekg_file": ekg_file_path,
-                        "ftp_test_file": ftp_file_path
+                        "ftp_test_file": ftp_file_path,
+                        "ekg_tests": ekg_tests,
+                        "ftp_tests": ftp_tests
                     }
+
 
                     persons_list_current.append(neue_person)
                     Person.save_person_data(persons_list_current)
@@ -388,7 +436,10 @@ with tabs[0]:
                 st.markdown(f"**Geburtsdatum:** {person.date_of_birth}")
                 st.markdown(f"**Adresse:** {person.address or 'Keine Adresse vorhanden'}")
                 st.markdown(f"**Telefonnummer:** {person_data.get('phone_number', 'Keine Telefonnummer vorhanden')}") 
-
+                st.button("Person bearbeiten", key="edit_person_button", on_click=lambda: st.session_state.update({
+                                'show_edit_person_form': True,
+                                'show_new_person_form': False
+                            }))
             st.markdown("<p class='hidden-markdown'</p>", unsafe_allow_html=True)
         else:
             # Person ausgewählt, aber keine Daten vorhanden
@@ -396,6 +447,7 @@ with tabs[0]:
             st.session_state['person_select_box'] = "" # Selectbox zurücksetzen
             st.session_state['show_delete_confirmation'] = False
             st.session_state['show_person_details'] = False
+            
 
 
     # Lösch-Button und Bestätigungsdialog
@@ -446,6 +498,82 @@ with tabs[0]:
        not st.session_state['show_person_details']:
         st.info("Bitte wählen Sie eine Person aus oder legen Sie eine neue an.")
 
+    if st.session_state.get('show_edit_person_form', False) and person_data:
+
+        st.subheader("Person bearbeiten")
+
+        with st.form("bearbeite_person_formular"):
+            firstname = st.text_input("Vorname", value=person_data["firstname"])
+            lastname = st.text_input("Nachname", value=person_data["lastname"])
+            birth_date = st.date_input("Geburtsdatum", value=pd.to_datetime(person_data["date_of_birth"]))
+            gender = st.selectbox("Geschlecht", ["male", "female"], index=["male", "female"].index(person_data.get("gender", "male")))
+            address = st.text_input("Adresse", value=person_data.get("address", ""))
+            phone_number = st.text_input("Telefonnummer", value=person_data.get("phone_number", ""))
+
+            st.markdown("### Optional: Neue Dateien hochladen")
+            picture_file = st.file_uploader("Neues Profilbild hochladen", type=["jpg", "jpeg", "png"])
+            ekg_file = st.file_uploader("Neuer EKG-Test (TXT/CSV)", type=["txt", "csv"])
+            ftp_file = st.file_uploader("Neuer FTP-Test (FIT/CSV)", type=["fit", "csv"])
+
+            submitted = st.form_submit_button("Änderungen speichern")
+
+        if submitted:
+            # Dateiordner vorbereiten
+            os.makedirs("data/files", exist_ok=True)
+            os.makedirs("data/pictures", exist_ok=True)
+
+            # Update Felder
+            person_data["firstname"] = firstname.strip()
+            person_data["lastname"] = lastname.strip()
+            person_data["date_of_birth"] = birth_date.strftime("%Y-%m-%d")
+            person_data["gender"] = gender
+            person_data["address"] = address.strip()
+            person_data["phone_number"] = phone_number.strip()
+
+            # Bild speichern
+            if picture_file:
+                profile_picture_path = f"data/pictures/profile_{person_data['id']}_{picture_file.name}"
+                with open(profile_picture_path, "wb") as f:
+                    f.write(picture_file.getbuffer())
+                person_data["picture_path"] = profile_picture_path
+
+            # Neuen EKG-Test hinzufügen
+            if ekg_file:
+                ekg_file_path = f"data/files/ruhe_ekg_{person_data['id']}_{ekg_file.name}"
+                with open(ekg_file_path, "wb") as f:
+                    f.write(ekg_file.getbuffer())
+                existing_ekg_ids = [test["id"] for p in persons_list for test in p.get("ekg_tests", [])]
+                new_ekg_id = max(existing_ekg_ids + [0]) + 1
+                person_data.setdefault("ekg_tests", []).append({
+                    "id": new_ekg_id,
+                    "date": date.today().isoformat(),
+                    "result_link": ekg_file_path
+                })
+
+            # Neuen FTP-Test hinzufügen
+            if ftp_file:
+                ftp_file_path = f"data/files/ftp_test_{person_data['id']}_{ftp_file.name}"
+                with open(ftp_file_path, "wb") as f:
+                    f.write(ftp_file.getbuffer())
+                existing_ftp_ids = [test["id"] for p in persons_list for test in p.get("ftp_tests", [])]
+                new_ftp_id = max(existing_ftp_ids + [0]) + 1
+                person_data.setdefault("ftp_tests", []).append({
+                    "id": new_ftp_id,
+                    "date": date.today().isoformat(),
+                    "result_link": ftp_file_path
+                })
+
+            # Speichern
+            for i, p in enumerate(persons_list):
+                if p["id"] == person_data["id"]:
+                    persons_list[i] = person_data
+                    break
+            Person.save_person_data(persons_list)
+
+            st.success("Personendaten erfolgreich aktualisiert.")
+            st.session_state['show_edit_person_form'] = False
+            st.rerun()
+
 # Tests
 with tabs[1]:
     st.header("Ruhe-EKG")
@@ -483,15 +611,62 @@ with tabs[1]:
                         # Herzfrequenz schätzen und anzeigen -> muss noch geändert werden
                         hr = ekg.estimate_hr(threshold=threshold)
                         if hr is not None:
-                            st.metric("Geschätzte Herzfrequenz (bpm)", hr)
+                            st.metric("Herzfrequenz (bpm)", hr)
                         else:
                             st.warning("Nicht genügend Peaks zur Herzfrequenz-Berechnung gefunden.")
 
                         # Plot erstellen und anzeigen
                         # Das Figure-Objekt von plot_time_series() abfangen und an st.pyplot übergeben
-                        fig_to_display = ekg.plot_time_series(threshold=threshold) # threshold übergeben(Optional)
-                        st.pyplot(fig_to_display) #  ST.PYPLOT 
-                        plt.close(fig_to_display) #  Schließen der Matplotlib-Figur, um Speicherlecks zu vermeiden
+                        df = ekg.df
+
+                        if df is not None and not df.empty:
+                            y_column = None
+                            for col in df.columns:
+                                if col.lower() in ["value", "amplitude", "signal", "volt", "messwerte in mv","spannung","wert"]:
+                                    y_column = col
+                                    break
+
+                            if y_column is None:
+                                st.error("Keine geeignete Spalte für EKG-Daten gefunden (z. B. 'value', 'signal', 'amplitude').")
+                            else:
+                                fig = go.Figure()
+
+                                fig.add_trace(go.Scatter(
+                                    x=df.index,
+                                    y=df[y_column],
+                                    mode="lines",
+                                    name="EKG-Signal",
+                                    hovertemplate="Zeit: %{x}<br>Wert: %{y} mV<extra></extra>"
+                                ))
+                                # Peaks berechnen und anzeigen
+                                try:
+                                    respacing_factor = 5  # oder z. B. 1 für maximale Genauigkeit
+                                    peaks = ekg.find_peaks(threshold=threshold, respacing_factor=respacing_factor)
+                                    peak_df = df.iloc[peaks]
+
+                                    fig.add_trace(go.Scatter(
+                                        x=peak_df.index,
+                                        y=peak_df[y_column],
+                                        mode="markers",
+                                        name="Peaks",
+                                        marker=dict(color="red", size=8),
+                                        hovertemplate="Peak<br>Zeit: %{x}<br>Wert: %{y} mV<extra></extra>"
+                                    ))
+                                except Exception as e:
+                                    st.warning(f"Fehler beim Ermitteln der Peaks: {e}")
+
+
+                                fig.update_layout(
+                                    title="Ruhe-EKG Verlauf",
+                                    xaxis_title="Zeit",
+                                    yaxis_title="Amplitude",
+                                    hovermode="x unified",
+                                    template="plotly_white"
+                                )
+
+                                st.plotly_chart(fig, use_container_width=True)
+                        else:
+                            st.warning("Keine EKG-Daten zum Anzeigen verfügbar.")
 
                     except Exception as e:
                         st.error(f"Fehler beim Laden des EKG-Tests: {e}")
@@ -534,7 +709,7 @@ with tabs[2]:
                             )
 
 
-                        st.write(f"### FTP-Test geladen: Test-ID {ftp.id}, Datum: {ftp.date}")
+                        st.write(f"### FTP-Test: ID {ftp.id}, Datum: {ftp.date}")
                         st.write(f"Person: {ftp.person_firstname} {ftp.person_lastname}")
 
                         df = ftp.df
@@ -544,11 +719,17 @@ with tabs[2]:
                             dauer_min = round(dauer.total_seconds() / 60, 1)
                             mean_hr = round(df["heart_rate"].mean(), 1) if "heart_rate" in df else "?"
                             max_power = df["power"].max() if "power" in df else "?"
+                            max_hr = df["heart_rate"].max() if "heart_rate" in df else "?"
 
-                            st.metric("Gesamtdauer", f"{dauer_min} Minuten")
-                            st.metric("Ø Herzfrequenz", f"{mean_hr} bpm")
-                            st.metric("Maximale Leistung", f"{max_power} Watt")
-
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                st.metric("Gesamtdauer", f"{dauer_min} Minuten")
+                                st.metric("Maximale Leistung", f"{max_power} Watt")
+                            with col2:
+                                st.metric("Maximale Herzfrequenz", f"{max_hr} bpm")
+                                st.metric("Ø Herzfrequenz", f"{mean_hr} bpm")
+                            
+                            
                             st.write("### Verlauf des FTP-Tests")
                             start_time = df.index[0]
                             df["minuten"] = (df.index - start_time).total_seconds() / 60
@@ -564,20 +745,45 @@ with tabs[2]:
                                 show_cadence = st.checkbox("Trittfrequenz", value=True)
 
                             # Plot vorbereiten
-                            fig, ax = plt.subplots(figsize=(10, 5))
+                            fig = go.Figure()
 
                             if show_hr and "heart_rate" in df.columns:
-                                ax.plot(df["minuten"], df["heart_rate"], label="heart_rate")
-                            if show_power and "power" in df.columns:
-                                ax.plot(df["minuten"], df["power"], label="power")
-                            if show_cadence and "cadence" in df.columns:
-                                ax.plot(df["minuten"], df["cadence"], label="cadence")
+                                fig.add_trace(go.Scatter(
+                                    x=df["minuten"],
+                                    y=df["heart_rate"],
+                                    mode="lines",
+                                    name="Herzfrequenz",
+                                    hovertemplate='Zeit: %{x:.1f} Min<br>Herzfrequenz: %{y} bpm<extra></extra>'
+                                ))
 
-                            ax.set_xlabel("Minuten")
-                            ax.set_ylabel("Wert")
-                            ax.set_title("Verlauf: Herzfrequenz, Leistung, Trittfrequenz")
-                            ax.legend()
-                            st.pyplot(fig)
+                            if show_power and "power" in df.columns:
+                                fig.add_trace(go.Scatter(
+                                    x=df["minuten"],
+                                    y=df["power"],
+                                    mode="lines",
+                                    name="Leistung",
+                                    hovertemplate='Zeit: %{x:.1f} Min<br>Leistung: %{y} W<extra></extra>'
+                                ))
+
+                            if show_cadence and "cadence" in df.columns:
+                                fig.add_trace(go.Scatter(
+                                    x=df["minuten"],
+                                    y=df["cadence"],
+                                    mode="lines",
+                                    name="Trittfrequenz",
+                                    hovertemplate='Zeit: %{x:.1f} Min<br>TF: %{y} rpm<extra></extra>'
+                                ))
+
+                            fig.update_layout(
+                                title="Verlauf: Herzfrequenz, Leistung, Trittfrequenz",
+                                xaxis_title="Zeit (Minuten)",
+                                yaxis_title="Wert",
+                                hovermode="x unified",
+                                template="plotly_white"
+                            )
+
+                            st.plotly_chart(fig, use_container_width=True)
+
 
 
                         else:
@@ -606,9 +812,20 @@ with tabs[3]:
     if selected_person_name:
         person_data_for_zones = Person.find_person_data_by_name(selected_person_name)
         if person_data_for_zones:
-            person_obj_for_zones = Person(person_data_for_zones)
-            # Ruft die angepasste calc_max_heart_rate auf, die FTP-Wert bevorzugt
-            max_hr_for_zones = person_obj_for_zones.calc_max_heart_rate()
+            ftp_tests = person_data_for_zones.get("ftp_tests", [])
+            if ftp_tests:
+                # Nimm den neuesten FTP-Test (höchste ID)
+                ftp_test_sorted = sorted(ftp_tests, key=lambda x: x['id'], reverse=True)[0]
+                ftp_path = ftp_test_sorted.get("result_link")
+                if ftp_path:
+                    try:
+                        ftp_test_obj = FTP_Test(ftp_path)
+                        df = ftp_test_obj.df
+                        if not df.empty and "heart_rate" in df.columns:
+                            max_hr_for_zones = df["heart_rate"].max()
+                    except Exception as e:
+                        st.warning(f"Fehler beim Auslesen des FTP-Tests: {e}")
+
             if max_hr_for_zones is None:
                 st.warning(f"Keine maximale Herzfrequenz für **{selected_person_name}** verfügbar. Bitte FTP-Test-Wert eingeben oder Geburtsdatum/Geschlecht prüfen.")
 
@@ -628,7 +845,8 @@ with tabs[3]:
             hf_zones_data["Berechnete Zonen (bpm)"].append(f"{min_hr}-{max_hr}") 
 
         st.session_state['hf_zones_df'] = pd.DataFrame(hf_zones_data)
-        st.info(f"Die Herzfrequenz-Zonen basieren auf einer maximalen Herzfrequenz von **{round(max_hr_for_zones)} bpm** für **{selected_person_name}**.")
+        st.info(f"Die Herzfrequenz-Zonen basieren auf der maximalen HF aus dem letzten FTP-Test (**{round(max_hr_for_zones)} bpm**) von **{selected_person_name}**.")
+
     else:
         # Standard-Werte, wenn keine Person ausgewählt ist oder MHF nicht berechnet werden kann
         st.info("Bitte wählen Sie eine Person im Tab 'Daten' aus und geben Sie ggf. die maximale Herzfrequenz an, um personalisierte HF-Zonen anzuzeigen.")
@@ -651,7 +869,7 @@ with tabs[3]:
         zone_name = row['Zone'] 
         color = colors.get(zone_name, '') 
 
-        return [f'background-color: {color}' for _ in row.index]
+        return [f'background-color: {color};color: black' for _ in row.index]
 
 
     # Anzeige der HF-Zonen-Tabelle mit Styling

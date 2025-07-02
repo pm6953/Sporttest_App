@@ -37,6 +37,16 @@ class Person:
             return True # Erfolgreich gelöscht
         return False
      # Person nicht gefunden oder nicht gelöscht
+
+    @staticmethod
+    def replace_person_data(person_id, new_data):
+        persons = Person.load_person_data()
+        for i, p in enumerate(persons):
+            if p["id"] == person_id:
+                persons[i] = new_data
+                Person.save_person_data(persons)
+                return True
+        return False 
     @staticmethod
     def get_person_list(person_data):
         """A Function that takes the persons-dictionary and returns a list auf all person names"""
