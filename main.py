@@ -11,6 +11,7 @@ from datetime import date
 import pandas as pd
 import matplotlib.pyplot as plt 
 from fpdf import FPDF
+import tempfile
 
 st.set_page_config(layout="centered") # Layout in der Mitte
 
@@ -928,7 +929,7 @@ with tabs[3]:
 
 
     # Funktion zum Erzeugen des PDF-Berichts
-    def create_training_report_pdf(person_name, hf_zones_df, training_plan_df):
+    def create_training_report_pdf(person_name, hf_zones_df, training_plan_df,ekg_summary, ftp_summary, person_data):
         pdf = FPDF()
         pdf.add_page()
         # Setze einen Font, der Umlaute unterstützt (z.B. DejaVuSans-Bold oder Arial, wenn es kein Problem gibt)
@@ -939,6 +940,14 @@ with tabs[3]:
 
         # Titel
         pdf.cell(200, 10, txt=f"Trainingsbericht für {person_name}", ln=True, align="C")
+        pdf.ln(10)
+        pdf.set_font("Arial", 'B', 12)
+        pdf.cell(200, 10, txt="Personendaten:", ln=True, align="L")
+        pdf.set_font("Arial", size=10)
+        pdf.cell(200, 8, txt=f"Name: {person_data.get('firstname', '')} {person_data.get('lastname', '')}", ln=True)
+        pdf.cell(200, 8, txt=f"Geburtsdatum: {person_data.get('date_of_birth', '')}", ln=True)
+        pdf.cell(200, 8, txt=f"Adresse: {person_data.get('address', '')}", ln=True)
+        pdf.cell(200, 8, txt=f"Telefon: {person_data.get('phone_number', '')}", ln=True)
         pdf.ln(10)
 
         # HF-Zonen
@@ -952,7 +961,11 @@ with tabs[3]:
         pdf.set_fill_color(200, 220, 255) # Light blue background for header
         
         # Passe die Spaltenbreiten dynamisch an die Anzahl der Spalten an
-        hf_col_width = pdf.w / len(hf_zones_df.columns) - 2 # -2 für kleine Ränder
+        left_margin = pdf.l_margin  # Standard: 10 mm
+        right_margin = pdf.r_margin  # meist ebenfalls 10 mm
+        usable_width = pdf.w - left_margin - right_margin
+
+        hf_col_width = usable_width / len(hf_zones_df.columns)
         for col in hf_zones_df.columns:
             pdf.cell(hf_col_width, 7, col, 1, 0, 'C', 1)
         pdf.ln()
@@ -974,8 +987,10 @@ with tabs[3]:
         # Header (Angepasste Spaltenbreiten - 'Notizen' Spalte entfernt)
         # Passen Sie die Breiten entsprechend an die verbleibenden 4 Spalten an
         # Tag, Übung, Dauer (Min.), Intensität
-        col_widths_training = [30, 70, 40, 40] 
-        headers_training = training_plan_df.columns.tolist() # Nimmt jetzt automatisch die 4 Spalten
+        headers_training = training_plan_df.columns.tolist()
+        # Gleichmäßige Breiten für alle Spalten – anpassbar
+        col_widths_training = [pdf.w / len(headers_training) - 5] * len(headers_training)
+
         pdf.set_fill_color(200, 220, 255) # Light blue background for header
         
         for i, header in enumerate(headers_training):
@@ -987,19 +1002,60 @@ with tabs[3]:
             for i, col_name in enumerate(headers_training):
                 pdf.cell(col_widths_training[i], 7, str(row[col_name]), 1, 0, 'L') # 'L' für linksbündig
             pdf.ln()
-        
+        # Zusammenfassung EKG
+        if ekg_summary:
+            pdf.set_font("Arial", 'B', 12)
+            pdf.cell(200, 10, txt="Auswertung Ruhe-EKG:", ln=True, align="L")
+            pdf.set_font("Arial", size=10)
+            for k, v in ekg_summary.items():
+                pdf.cell(200, 8, txt=f"{k}: {v}", ln=True)
+            pdf.ln(10)
+
+        # Zusammenfassung FTP
+        if ftp_summary:
+            pdf.set_font("Arial", 'B', 12)
+            pdf.cell(200, 10, txt="Auswertung FTP-Test:", ln=True, align="L")
+            pdf.set_font("Arial", size=10)
+            for k, v in ftp_summary.items():
+                pdf.cell(200, 8, txt=f"{k}: {v}", ln=True)
+
         # WICHTIG: Die Ausgabe sollte in 'latin-1' erfolgen, wenn Umlaute direkt ohne spezielle Font-Dateien verwendet werden
         # oder 'utf-8' wenn der FPDF Font diese unterstützt und zuvor geladen wurde (z.B. DejaVuSans)
-        return pdf.output(dest='S').encode('latin-1') 
+        return bytes(pdf.output(dest='S'))
+
 
 
     # Export-Button für PDF
     if st.button("Trainingsplan als PDF exportieren"):
         if selected_person_name:
+            person_data = Person.find_person_data_by_name(selected_person_name)
+            ftp_summary = {}
+            ekg_summary = {}
+
+            # FTP-Auswertung laden
+            ftp_tests = person_data.get("ftp_tests", [])
+            if ftp_tests:
+                latest_ftp = sorted(ftp_tests, key=lambda x: x["id"], reverse=True)[0]
+                ftp_obj = FTP_Test(file_path=latest_ftp["result_link"])
+                ftp_summary = ftp_obj.get_summary()
+
+            # EKG-Auswertung laden
+            ekg_tests = person_data.get("ekg_tests", [])
+            if ekg_tests:
+                latest_ekg = sorted(ekg_tests, key=lambda x: x["id"], reverse=True)[0]
+                ekg_obj = EKGdata.load_by_id(latest_ekg["id"], persons_list)
+                threshold = ekg_obj.auto_threshold()
+                bpm = ekg_obj.estimate_hr(threshold)
+                if bpm:
+                    ekg_summary = {"Geschätzte Herzfrequenz": f"{bpm} bpm"}
+
             pdf_output = create_training_report_pdf(
                 selected_person_name,
                 st.session_state['hf_zones_df'],
-                st.session_state['training_plan_df']
+                st.session_state['training_plan_df'],
+                ekg_summary,
+                ftp_summary,
+                person_data
             )
             st.download_button(
                 label="PDF herunterladen",
@@ -1010,7 +1066,6 @@ with tabs[3]:
             st.success("PDF-Bericht erfolgreich erstellt. Klicken Sie auf 'PDF herunterladen'.")
         else:
             st.warning("Bitte wählen Sie eine Person aus, um den Trainingsplan als PDF zu exportieren.")
-
 
 
 
