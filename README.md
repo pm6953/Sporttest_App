@@ -1,27 +1,31 @@
 ## Sporttest-App
+Diese App soll einen Arzt dabei unterstützen für seine Patienten die Test auswerten und einen selbst angepassten Trainingsplan erstellen zu können.
 
-# main.py 
-Darstellung der App
+---
 
-# hf_zonen.py
-- errechnen der Zonen nach Erkennung der maximalen HF nach Stufentests 
-- Darstellung in der App unter Trainingsplan
-- zu tun: richtiger stufentest einfügen unter activities je nach Person
+## Features
 
-# get_person.py
-in diesem File wird ein Code erstellt, welcher es schafft dass eine Person in der App ausgewählt werden kann
+- Auswertung Ruhe-EKG
+- Auswertung FTP-Tests
+- interaktive Trainingsplan-Tabelle
+- pdf Ausgabe
 
-# read_persondata.py
+---
 
-# read_spiro.py
-in diesem file werden die Daten des Lungentestes ausgelesen und relvante Daten herausgeholt
+## Installation
 
-# read_Stufentest.py
-soll das gleiche machen wie das read_spiro.py 
+### 1. Repository klonen
 
-# read_ekgdata.py
-- Ruheekg daten auslesen
-- Ruhepuls festlegen -> Mittelwert
+```bash
+git clone 
+cd sporttest-app
 
+### 2. virtuelle Umgebung erstellen
+python -m venv venv          # erstelle virtuelle Umgebung
+source venv/bin/activate     # aktivieren auf Mac/Linux
+venv\Scripts\activate        # aktivieren auf Windows
+
+### Starten der App
+Terminal: streamlit run main.py
 
  
