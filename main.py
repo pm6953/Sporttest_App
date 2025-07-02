@@ -1,7 +1,7 @@
 import streamlit as st
 from read_ekgdata import EKGdata
 from read_persondata import Person
-from read_fitfile import FTP_Test
+from fit_reader import FTP_Test
 import json
 from PIL import Image
 import os
@@ -408,36 +408,84 @@ with tabs[1]:
 
 with tabs[2]:
     st.header("Stufentest Fahrradergometer")
-    # selected_person_name_test_tab definieren, damit person_data abgerufen werden kann
     selected_person_name_test_tab = st.session_state.get('person_select_box', '')
 
-    if selected_person_name_test_tab: # Nur fortfahren, wenn eine Person ausgewählt ist
+    if selected_person_name_test_tab:
         person_data_test_tab = Person.find_person_data_by_name(selected_person_name_test_tab)
-        
-        if person_data_test_tab: # Prüfen, ob die Personendaten gefunden wurden
+
+        if person_data_test_tab:
             ftp_tests = person_data_test_tab.get("ftp_tests", [])
 
-            if ftp_tests: # Nur wenn FTP-Tests vorhanden sind
-                # FTP-Tests nach ID absteigend sortieren (neueste zuerst)
+            if ftp_tests:
                 ftp_tests_sorted = sorted(ftp_tests, key=lambda x: x['id'], reverse=True)
-
                 ftp_test_options = [f"FTP ID {test['id']} - {test['date']}" for test in ftp_tests_sorted]
 
-                # Standardmäßig neuester EKG-Test ausgewählt (höchste ID)
-                selected_ftp_test = st.selectbox( "EKG-Test auswählen", ftp_test_options, index=0)
+                selected_ftp_test = st.selectbox("FTP-Test auswählen", ftp_test_options, index=0)
 
                 if selected_ftp_test:
-                    # EKG-Test ID extrahieren
                     ftp_test_id = int(selected_ftp_test.split()[2])
                     try:
-                        ftp = FTP_Test.load_by_id(ftp_test_id, persons_list)
+                        test = next(test for p in persons_list for test in p.get("ftp_tests", []) if test["id"] == ftp_test_id)
+                        ftp = FTP_Test(
+                            file_path=test["result_link"],
+                            id=test.get("id"),
+                            date=test.get("date"),
+                            person_firstname=person_data_test_tab.get("firstname"),
+                            person_lastname=person_data_test_tab.get("lastname")
+                            )
+
 
                         st.write(f"### FTP-Test geladen: Test-ID {ftp.id}, Datum: {ftp.date}")
                         st.write(f"Person: {ftp.person_firstname} {ftp.person_lastname}")
 
-                        
+                        df = ftp.df
+                        if not df.empty:
+                            st.write("### Zusammenfassung des Tests")
+                            dauer = df.index[-1] - df.index[0]
+                            dauer_min = round(dauer.total_seconds() / 60, 1)
+                            mean_hr = round(df["heart_rate"].mean(), 1) if "heart_rate" in df else "?"
+                            max_power = df["power"].max() if "power" in df else "?"
+
+                            st.metric("Gesamtdauer", f"{dauer_min} Minuten")
+                            st.metric("Ø Herzfrequenz", f"{mean_hr} bpm")
+                            st.metric("Maximale Leistung", f"{max_power} Watt")
+
+                            st.write("### Verlauf des FTP-Tests")
+                            start_time = df.index[0]
+                            df["minuten"] = (df.index - start_time).total_seconds() / 60
+
+                            # Plot erstellen basierend auf Auswahl
+                            # Checkboxen zur Auswahl
+                            col1, col2, col3 = st.columns(3)
+                            with col1:
+                                show_hr = st.checkbox("Herzfrequenz", value=True)
+                            with col2:
+                               show_power = st.checkbox("Leistung", value=True)
+                            with col3:
+                                show_cadence = st.checkbox("Trittfrequenz", value=True)
+
+                            # Plot vorbereiten
+                            fig, ax = plt.subplots(figsize=(10, 5))
+
+                            if show_hr and "heart_rate" in df.columns:
+                                ax.plot(df["minuten"], df["heart_rate"], label="heart_rate")
+                            if show_power and "power" in df.columns:
+                                ax.plot(df["minuten"], df["power"], label="power")
+                            if show_cadence and "cadence" in df.columns:
+                                ax.plot(df["minuten"], df["cadence"], label="cadence")
+
+                            ax.set_xlabel("Minuten")
+                            ax.set_ylabel("Wert")
+                            ax.set_title("Verlauf: Herzfrequenz, Leistung, Trittfrequenz")
+                            ax.legend()
+                            st.pyplot(fig)
+
+
+                        else:
+                            st.warning("Keine darstellbaren Daten im FTP-Test gefunden.")
+
                     except Exception as e:
-                        st.error(f"Fehler beim Laden des FTP-Test: {e}")
+                        st.error(f"Fehler beim Laden des FTP-Tests: {e}")
             else:
                 st.info("Für die ausgewählte Person sind keine FTP-Tests vorhanden.")
         else:
@@ -445,10 +493,6 @@ with tabs[2]:
     else:
         st.info("Bitte wählen Sie zuerst eine Person im Tab 'Daten' aus, um FTP-Tests anzuzeigen.")
 
-    st.write("Zusammenfassung")
-    st.write("Datum des letzten Tests:")
-    st.write("Gesamtdauer des Tests:")
-    st.write("Weitere FTP-Test-Metriken hier.")
 
 # TAB 3: Trainingsplan
 with tabs[3]:

@@ -6,7 +6,7 @@
         "lastname": "Huber",
         "picture_path": "data/pictures/tb.jpg",
         "gender": "male",
-        "address": "Keine Addresse vorhanden",
+        "address": "Marktplatz 1, 6020 Innsbruck",
         "ekg_tests": [
             {
                 "id": 1,
@@ -18,6 +18,13 @@
                 "date": "11.3.2023",
                 "result_link": "data/ekg_data/04_Belastung.txt"
             }
+        ],
+        "ftp_tests": [
+            {
+                "id": 1,
+                "date": "2025-07-02",
+                "result_link": "C:\\Users\\gabse\\git\\Sporttest_App\\Sporttest_App\\data\\Stufentest_data\\FTP_File_1.fit"
+            }
         ]
     },
     {
@@ -27,7 +34,7 @@
         "lastname": "Heyer",
         "picture_path": "data/pictures/js.jpg",
         "gender": "male",
-        "address": "Keine Addresse vorhanden",
+        "address": "Pradler Straße 1, 6020 Innsbruck",
         "ekg_tests": [
             {
                 "id": 3,
@@ -35,11 +42,11 @@
                 "result_link": "data/ekg_data/02_Ruhe.txt"
             }
         ],
-        "ftp_test": [
+        "ftp_tests": [
             {
-                "id": 1,
-                "date": "10.2.2023",
-                "result_link": "data/Stufentest_data/11129269515_ACTIVITY.fit"
+                "id": 2,
+                "date": "2025-07-02",
+                "result_link": "C:\\Users\\gabse\\git\\Sporttest_App\\Sporttest_App\\data\\Stufentest_Data\\FTP_File_2.fit"
             }
         ]
     },
@@ -50,19 +57,12 @@
         "lastname": "Schmirander",
         "gender": "male",
         "picture_path": "data/pictures/bl.jpg",
-        "address": "Keine Addresse vorhanden",
+        "address": "Wiltener Straße 1, 6020 Innsbruck",
         "ekg_tests": [
             {
                 "id": 4,
                 "date": "11.3.2023",
                 "result_link": "data/ekg_data/03_Ruhe.txt"
-            }
-        ],
-        "ftp_test": [
-            {
-                "id": 1,
-                "date": "16.8.2023",
-                "result_link": "data/Stufentest_data/6817599882_ACTIVITY.fit"
             }
         ]
     },
