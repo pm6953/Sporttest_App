@@ -9,6 +9,7 @@ from datetime import date
 import pandas as pd
 import matplotlib.pyplot as plt 
 from fpdf import FPDF
+import io
 
 st.set_page_config(layout="centered") # Layout in der Mitte
 
@@ -35,10 +36,22 @@ if 'show_person_details' not in st.session_state:
     st.session_state['show_person_details'] = False
 if 'missing_optional_fields_message' not in st.session_state:
     st.session_state['missing_optional_fields_message'] = ""
-# NEU: Variable, um festzuhalten, welche Person zuletzt HINZUGEFÜGT wurde
 if 'just_added_person_name' not in st.session_state:
     st.session_state['just_added_person_name'] = ""
 
+# Session State Variablen für PDF-Inhalte und Grafik-Buffer aus allen Tabs
+if 'hf_graphic_buffer' not in st.session_state:
+    st.session_state['hf_graphic_buffer'] = None
+if 'ekg_graphic_buffer' not in st.session_state:
+    st.session_state['ekg_graphic_buffer'] = None
+if 'current_ekg_data' not in st.session_state: # Speichert den DataFrame der EKG-Daten
+    st.session_state['current_ekg_data'] = None
+if 'ftp_graphic_buffer' not in st.session_state:
+    st.session_state['ftp_graphic_buffer'] = None
+if 'current_ftp_data' not in st.session_state: # Speichert den DataFrame der FTP-Daten
+    st.session_state['current_ftp_data'] = None
+if 'selected_person_full_data' not in st.session_state: # Speichert die vollen Personendaten
+    st.session_state['selected_person_full_data'] = None
 
 # Initialisiere den Trainingsplan hier, direkt nach den anderen Session State Variablen
 if 'training_plan_df' not in st.session_state:
@@ -130,14 +143,23 @@ def on_person_select_change():
         st.session_state['show_delete_confirmation'] = False # Löschbestätigung ausblenden
         st.session_state['person_deleted_message'] = False # Löschmeldung ausblenden
         st.session_state['person_added_message'] = False # Hinzufügen-Meldung ausblenden
+        # Lade die vollständigen Daten der ausgewählten Person
+        st.session_state['selected_person_full_data'] = Person.find_person_data_by_name(st.session_state['person_select_box'])
     else:
         st.session_state['show_person_details'] = False
         st.session_state['show_new_person_form'] = False
         st.session_state['show_delete_confirmation'] = False
         st.session_state['person_deleted_message'] = False
         st.session_state['person_added_message'] = False
+        st.session_state['selected_person_full_data'] = None 
+
     st.session_state['missing_optional_fields_message'] = "" # Meldung zurücksetzen
     st.session_state['just_added_person_name'] = "" # Wichtig: reset this
+    st.session_state['hf_graphic_buffer'] = None
+    st.session_state['ekg_graphic_buffer'] = None
+    st.session_state['current_ekg_data'] = None
+    st.session_state['ftp_graphic_buffer'] = None
+    st.session_state['current_ftp_data'] = None
 
 # Callback: Nach erfolgreichem Hinzufügen einer Person
 def on_person_add_success_indicator(firstname, lastname, missing_fields_message=""):
@@ -147,7 +169,13 @@ def on_person_add_success_indicator(firstname, lastname, missing_fields_message=
     st.session_state['show_person_details'] = True
     st.session_state['missing_optional_fields_message'] = missing_fields_message 
     st.session_state['just_added_person_name'] = f"{firstname} {lastname}" # <-- Wichtig: Setzt den Namen hier!
-
+    # FÜR PDF: Clear aller PDF-bezogenen Session States
+    st.session_state['hf_graphic_buffer'] = None
+    st.session_state['ekg_graphic_buffer'] = None
+    st.session_state['current_ekg_data'] = None
+    st.session_state['ftp_graphic_buffer'] = None
+    st.session_state['current_ftp_data'] = None
+    # 'selected_person_full_data' wird nach experimental_rerun gesetzt
 
 # Tabs für die Navigation
 tabs = st.tabs(["Daten", "Tests", "FTP-Test", "Trainingsplan"])
@@ -491,6 +519,17 @@ with tabs[1]:
                         # Das Figure-Objekt von plot_time_series() abfangen und an st.pyplot übergeben
                         fig_to_display = ekg.plot_time_series(threshold=threshold) # threshold übergeben(Optional)
                         st.pyplot(fig_to_display) #  ST.PYPLOT 
+
+                        # Speichern des EKG-DataFrames im Session State
+                        # `ekg.df` sollte das DataFrame des geladenen EKG-Tests sein
+                        st.session_state['current_ekg_data'] = ekg.df 
+
+                        # Speichern des EKG-Grafik-Buffers im Session State
+                        # fig_to_display ist die Matplotlib-Figur, die du gerade erstellt hast
+                        ekg_buffer = io.BytesIO()
+                        fig_to_display.savefig(ekg_buffer, format='png') # Speichert die Grafik als PNG
+                        st.session_state['ekg_graphic_buffer'] = ekg_buffer
+
                         plt.close(fig_to_display) #  Schließen der Matplotlib-Figur, um Speicherlecks zu vermeiden
 
                     except Exception as e:
@@ -579,19 +618,38 @@ with tabs[2]:
                             ax.legend()
                             st.pyplot(fig)
 
+                            # Speichern des FTP-DataFrames im Session State
+                            st.session_state['current_ftp_data'] = df
+
+                            # Speichern des FTP-Grafik-Buffers im Session State
+                            ftp_buffer = io.BytesIO()
+                            fig.savefig(ftp_buffer, format='png') # Speichert die Grafik als PNG
+                            st.session_state['ftp_graphic_buffer'] = ftp_buffer
+                            plt.close(fig) # Schließt die Matplotlib-Figur
 
                         else:
                             st.warning("Keine darstellbaren Daten im FTP-Test gefunden.")
+                            st.session_state['current_ftp_data'] = None
+                            st.session_state['ftp_graphic_buffer'] = None
 
                     except Exception as e:
                         st.error(f"Fehler beim Laden des FTP-Tests: {e}")
+                        # Bei Fehler, Session State zurücksetzen
+                        st.session_state['current_ftp_data'] = None
+                        st.session_state['ftp_graphic_buffer'] = None
             else:
                 st.info("Für die ausgewählte Person sind keine FTP-Tests vorhanden.")
+                # Wenn keine Tests, auch Session State zurücksetzen
+                st.session_state['current_ftp_data'] = None
+                st.session_state['ftp_graphic_buffer'] = None
         else:
             st.warning("Die Daten zur ausgewählten Person konnten nicht gefunden werden. Bitte überprüfen Sie Ihre Auswahl.")
+            st.session_state['current_ftp_data'] = None
+            st.session_state['ftp_graphic_buffer'] = None
     else:
         st.info("Bitte wählen Sie zuerst eine Person im Tab 'Daten' aus, um FTP-Tests anzuzeigen.")
-
+        st.session_state['current_ftp_data'] = None
+        st.session_state['ftp_graphic_buffer'] = None # Initialisiere mit None, wenn keine Person ausgewählt
 
 # TAB 3: Trainingsplan
 with tabs[3]:
@@ -661,6 +719,7 @@ with tabs[3]:
         use_container_width=True
     )
 
+    
     st.markdown("---") # Trennlinie
 
     st.markdown("### Trainingsplan:")
@@ -701,99 +760,385 @@ with tabs[3]:
                 required=False,
                 width="small"
             )
-            # 'Notizen' aus column_config entfernt
+            
         }
     )
 
     # Speichern des bearbeiteten Trainings-DataFrames 
     st.session_state['training_plan_df'] = edited_df_training_plan
 
-
+    
     # Funktion zum Erzeugen des PDF-Berichts
-    def create_training_report_pdf(person_name, hf_zones_df, training_plan_df):
+    def create_training_report_pdf(person_data, hf_zones_df, training_plan_df,
+                                     hf_graphic_buffer_data,
+                                     ekg_df_data, ekg_graphic_buffer_data,
+                                     ftp_df_data, ftp_graphic_buffer_data):
+                                     
+        
         pdf = FPDF()
         pdf.add_page()
-        # Setze einen Font, der Umlaute unterstützt (z.B. DejaVuSans-Bold oder Arial, wenn es kein Problem gibt)
-        # FPDF benötigt TTF-Dateien, die in das Skript eingebettet oder vorher registriert werden müssen
-        # Für einfache Umlaute ohne spezielle Font-Dateien reicht latin-1 encoding bei der Ausgabe,
-        # aber Arial muss in der FPDF-Installation verfügbar sein (ist es standardmäßig).
+        pdf.set_left_margin(10)  # Setzt den linken Rand auf 10mm
+        pdf.set_right_margin(10) # Setzt den rechten Rand auf 10mm
         pdf.set_font("Arial", size=12)
-
-        # Titel
-        pdf.cell(200, 10, txt=f"Trainingsbericht für {person_name}", ln=True, align="C")
+        available_width = pdf.w - pdf.l_margin - pdf.r_margin 
+        # Titel des Berichts
+        pdf.cell(0, 10, txt=f"Sporttest-Bericht für {person_data['firstname']} {person_data['lastname']}", ln=True, align="C")
         pdf.ln(10)
-
-        # HF-Zonen
+         
+        # --- 1. Personen-Details (aus Tab 'Daten') ---
         pdf.set_font("Arial", 'B', 12)
-        pdf.cell(200, 10, txt="Herzfrequenz-Zonen:", ln=True, align="L")
+        pdf.cell(0, 10, txt="1. Personen-Details:", ln=True, align="L")
+        pdf.set_font("Arial", size=10)
+        pdf.ln(2)
+        pdf.multi_cell(0, 7, f"Name: {person_data['firstname']} {person_data['lastname']}")
+        
+        pdf.set_x(pdf.l_margin)
+
+        display_birthdate_pdf = "Nicht angegeben"
+        if person_data.get('birthdate'):
+            try:
+                display_birthdate_pdf = date.fromisoformat(person_data['birthdate']).strftime("%d.%m.%Y")
+            except (TypeError, ValueError):
+                display_birthdate_pdf = "Ungültiges Datum im Datensatz"
+
+               
+        #Geburtsdatum
+        pdf.multi_cell(0, 7, f"Geburtsdatum: {display_birthdate_pdf}")
+        pdf.set_x(pdf.l_margin)
+
+        #Geschlecht
+        pdf.multi_cell(0, 7, f"Geschlecht: {person_data['gender'] if person_data['gender'] else 'Nicht angegeben'}")
+        pdf.set_x(pdf.l_margin)
+
+        #FTP-Wert
+        ftp_value_for_pdf = person_data.get('ftp_value')
+        if ftp_value_for_pdf is not None:
+            pdf.multi_cell(0, 7, f"Aktueller FTP-Wert: {ftp_value_for_pdf} Watt")
+        else:
+            pdf.multi_cell(0, 7, "Aktueller FTP-Wert: Nicht angegeben")
+        pdf.set_x(pdf.l_margin)
+        pdf.ln(10)
+        
+
+
+        # --- 2. Herzfrequenz-Zonen ---
+        pdf.set_font("Arial", 'B', 12)
+        pdf.cell(0, 10, txt="2. Herzfrequenz-Zonen:", ln=True, align="L")
         pdf.set_font("Arial", size=10)
         pdf.ln(2)
 
-        # Tabelle der HF-Zonen
-        # Header
-        pdf.set_fill_color(200, 220, 255) # Light blue background for header
-        
-        # Passe die Spaltenbreiten dynamisch an die Anzahl der Spalten an
-        hf_col_width = pdf.w / len(hf_zones_df.columns) - 2 # -2 für kleine Ränder
-        for col in hf_zones_df.columns:
-            pdf.cell(hf_col_width, 7, col, 1, 0, 'C', 1)
+        # Herzfrequenz-Grafik
+        if hf_graphic_buffer_data:
+            hf_graphic_buffer_data.seek(0) # WICHTIG: Buffer auf 0 zurücksetzen, bevor gelesen wird
+            pdf.image(hf_graphic_buffer_data, x=10, w=180, h=0)
+            pdf.ln()
+            pdf.set_y(pdf.get_y() + 10)
+        else:
+            pdf.multi_cell(0, 7, "Keine Herzfrequenz-Zonen Grafik verfügbar.")
+            pdf.ln(10)
+
+
+        # Herzfrequenz-Tabelle
+        pdf.set_fill_color(200, 220, 255)
+        hf_col_width_zone = 40
+        hf_col_width_percent = 60
+        hf_col_width_bpm = 80
+        hf_widths = [hf_col_width_zone, hf_col_width_percent, hf_col_width_bpm]
+
+        headers_hf = hf_zones_df.columns.tolist()
+        for i, col in enumerate(headers_hf):
+            pdf.cell(hf_widths[i], 7, col, 1, 0, 'C', 1)
         pdf.ln()
 
-        # Data rows
         for index, row in hf_zones_df.iterrows():
-            for col in hf_zones_df.columns:
-                pdf.cell(hf_col_width, 7, str(row[col]), 1, 0, 'C')
+            pdf.cell(hf_widths[0], 7, str(row['Zone']), 1, 0, 'C')
+            pdf.cell(hf_widths[1], 7, str(row['Prozentsatz der MHF']), 1, 0, 'C')
+            pdf.cell(hf_widths[2], 7, str(row['Berechnete Zonen (bpm)']), 1, 0, 'C')
             pdf.ln()
         pdf.ln(10)
 
-        # Trainingsplan
+
+        # --- 3. EKG-Test Daten (aus Tab 'Tests') ---
+        # Füge nur hinzu, wenn Daten vorhanden sind
+        if ekg_df_data is not None and not ekg_df_data.empty and ekg_graphic_buffer_data is not None:
+            pdf.add_page()
+            pdf.set_xy(pdf.l_margin, pdf.t_margin)
+            pdf.set_font("Arial", 'B', 12)
+            pdf.cell(0, 10, txt="3. EKG-Testdaten:", ln=True, align="L")
+            pdf.set_font("Arial", size=10)
+            pdf.ln(2)
+
+            # EKG-Grafik einbetten
+            ekg_graphic_buffer_data.seek(0) 
+            img_width = 180
+            img_height = 0
+            if ekg_graphic_buffer_data is not None:
+                ekg_graphic_buffer_data.seek(0, io.SEEK_END)
+                size = ekg_graphic_buffer_data.tell()
+                ekg_graphic_buffer_data.seek(0)
+
+                if size == 0:
+                    pdf.multi_cell(0, 7, "Hinweis: EKG-Bild ist leer und kann nicht eingefügt werden.")
+                else:
+                    try:
+                        pdf.image(ekg_graphic_buffer_data, x=10, w=img_width, h=img_height)
+                    except Exception as e:
+                        pdf.multi_cell(0, 7, f"Fehler beim Einfügen des EKG-Bilds: {e}")
+            pdf.ln()
+            pdf.set_y(pdf.get_y() + 10) 
+
+            # EKG-Daten Tabelle (nur die ersten paar Zeilen zur Übersicht)
+            #pdf.set_x(pdf.l_margin)
+            pdf.multi_cell(available_width - 1, 7, "Erste Zeilen der EKG-Daten:")
+            ekg_display_df = ekg_df_data.head(5).copy()
+
+            columns_to_display_ekg = ['Timestamp', 'HeartRate', 'Power', 'Cadence', 'Speed'] # Reihenfolge angepasst
+            ekg_display_df = ekg_display_df[[col for col in columns_to_display_ekg if col in ekg_display_df.columns]]
+
+            ekg_header_widths = []
+            if not ekg_display_df.empty:
+                for col in ekg_display_df.columns:
+                    ekg_header_widths.append(min(pdf.get_string_width(str(col)) + 6, 40)) # Max 40, dynamisch an Text
+
+                total_width = sum(ekg_header_widths)
+                page_width = pdf.w - 20
+                if total_width > page_width and total_width > 0:
+                    scale_factor = page_width / total_width
+                    ekg_header_widths = [w * scale_factor for w in ekg_header_widths]
+
+            if ekg_header_widths and not ekg_display_df.empty:
+                pdf.set_fill_color(200, 220, 255)
+                for i, col in enumerate(ekg_display_df.columns):
+                    pdf.cell(ekg_header_widths[i], 7, col, 1, 0, 'C', 1)
+                pdf.ln()
+
+                for index, row in ekg_display_df.iterrows():
+                    for i, col_name in enumerate(ekg_display_df.columns):
+                        cell_content = ""
+                        if pd.notna(row[col_name]):
+                            if col_name == 'Timestamp':
+                                try:
+                                    cell_content = pd.to_datetime(row[col_name]).strftime('%H:%M:%S')
+                                except:
+                                    cell_content = str(row[col_name])
+                            else:
+                                cell_content = str(round(row[col_name], 2))
+                        pdf.cell(ekg_header_widths[i], 7, cell_content, 1, 0, 'L')
+                    pdf.ln()
+            else:
+                pdf.multi_cell(0, 7, "Keine EKG-Daten zur Anzeige verfügbar.")
+            pdf.ln(10)
+        else:
+            pdf.add_page()
+            pdf.set_xy(pdf.l_margin, pdf.t_margin)
+            pdf.set_font("Arial", 'B', 12)
+            pdf.cell(0, 10, txt="3. EKG-Testdaten:", ln=True, align="L")
+            pdf.set_font("Arial", size=10)
+            pdf.ln(2)
+            #pdf.set_x(pdf.l_margin)
+            pdf.multi_cell(available_width - 1, 7, "Keine EKG-Testdaten oder zugehörige Grafik für diesen Bericht verfügbar. Bitte laden Sie eine EKG-Datei im 'Tests'-Tab hoch.")
+            pdf.ln(10)
+
+
+        # --- 4. FTP-Test Daten (aus Tab 'FTP-Test') ---
+        if ftp_df_data is not None and not ftp_df_data.empty and ftp_graphic_buffer_data is not None:
+            pdf.add_page()
+            pdf.set_xy(pdf.l_margin, pdf.t_margin)
+            pdf.set_font("Arial", 'B', 12)
+            pdf.cell(0, 10, txt="4. FTP-Testdaten:", ln=True, align="L")
+            pdf.set_font("Arial", size=10)
+            pdf.ln(2)
+
+            # FTP-Grafik einbetten
+            ftp_graphic_buffer_data.seek(0) # WICHTIG: Buffer auf 0 zurücksetzen
+            if ftp_graphic_buffer_data is not None:
+                ftp_graphic_buffer_data.seek(0, io.SEEK_END)
+                size = ftp_graphic_buffer_data.tell()
+                ftp_graphic_buffer_data.seek(0)
+
+                if size == 0:
+                    pdf.multi_cell(0, 7, "Hinweis: FTP-Bild ist leer und kann nicht eingefügt werden.")
+                else:
+                    try:
+                        pdf.image(ftp_graphic_buffer_data, x=10, w=180, h=0)
+                    except Exception as e:
+                        pdf.multi_cell(0, 7, f"Fehler beim Einfügen des FTP-Bilds: {e}")
+            pdf.ln()
+            pdf.set_y(pdf.get_y() + 10)
+
+            # FTP-Daten Tabelle (nur die ersten paar Zeilen zur Übersicht)
+            #pdf.set_x(pdf.l_margin)
+            pdf.multi_cell(available_width - 1, 7, "Erste Zeilen der FTP-Daten:")
+            ftp_display_df = ftp_df_data.head(5).copy()
+
+            columns_to_display_ftp = ['Timestamp', 'Power', 'HeartRate', 'Cadence', 'Speed'] # Reihenfolge angepasst
+            ftp_display_df = ftp_display_df[[col for col in columns_to_display_ftp if col in ftp_display_df.columns]]
+
+            ftp_header_widths = []
+            if not ftp_display_df.empty:
+                for col in ftp_display_df.columns:
+                    ftp_header_widths.append(min(pdf.get_string_width(str(col)) + 6, 40))
+
+                total_width = sum(ftp_header_widths)
+                page_width = pdf.w - 20
+                if total_width > page_width and total_width > 0:
+                    scale_factor = page_width / total_width
+                    ftp_header_widths = [w * scale_factor for w in ftp_header_widths]
+
+            if ftp_header_widths and not ftp_display_df.empty:
+                pdf.set_fill_color(200, 220, 255)
+                for i, col in enumerate(ftp_display_df.columns):
+                    pdf.cell(ftp_header_widths[i], 7, col, 1, 0, 'C', 1)
+                pdf.ln()
+
+                for index, row in ftp_display_df.iterrows():
+                    for i, col_name in enumerate(ftp_display_df.columns):
+                        cell_content = ""
+                        if pd.notna(row[col_name]):
+                            if col_name == 'Timestamp':
+                                try:
+                                    cell_content = pd.to_datetime(row[col_name]).strftime('%H:%M:%S')
+                                except:
+                                    cell_content = str(row[col_name])
+                            else:
+                                cell_content = str(round(row[col_name], 2))
+                        pdf.cell(ftp_header_widths[i], 7, cell_content, 1, 0, 'L')
+                    pdf.ln()
+            else:
+                pdf.multi_cell(0, 7, "Keine FTP-Daten zur Anzeige verfügbar.")
+            pdf.ln(10)
+            #pdf.add_page()
+        else:
+            pdf.add_page()
+            pdf.set_xy(pdf.l_margin, pdf.t_margin)
+            pdf.set_font("Arial", 'B', 12)
+            pdf.cell(0, 10, txt="4. FTP-Testdaten:", ln=True, align="L")
+            pdf.set_font("Arial", size=10)
+            pdf.ln(2)
+            #pdf.set_x(pdf.l_margin)
+            pdf.multi_cell(available_width - 1, 7, "Keine FTP-Testdaten oder zugehörige Grafik für diesen Bericht verfügbar. Bitte laden Sie eine FTP-Datei im 'FTP-Test'-Tab hoch.")
+            pdf.ln(10)
+            #pdf.add_page()
+
+
+        # --- 5. Trainingsplan ---
+        pdf.add_page()
         pdf.set_font("Arial", 'B', 12)
-        pdf.cell(200, 10, txt="Trainingsplan:", ln=True, align="L")
+        pdf.cell(0, 10, txt="5. Trainingsplan:", ln=True, align="L")
         pdf.set_font("Arial", size=10)
         pdf.ln(2)
 
-        # Tabelle des Trainingsplans
-        # Header (Angepasste Spaltenbreiten - 'Notizen' Spalte entfernt)
-        # Passen Sie die Breiten entsprechend an die verbleibenden 4 Spalten an
-        # Tag, Übung, Dauer (Min.), Intensität
-        col_widths_training = [30, 70, 40, 40] 
-        headers_training = training_plan_df.columns.tolist() # Nimmt jetzt automatisch die 4 Spalten
-        pdf.set_fill_color(200, 220, 255) # Light blue background for header
-        
-        for i, header in enumerate(headers_training):
+        col_widths_training = [30, 70, 40, 40]
+        display_columns_training = ["Tag", "Übung", "Dauer (Min.)", "Intensität"]
+
+        pdf.set_fill_color(200, 220, 255)
+
+        for i, header in enumerate(display_columns_training):
             pdf.cell(col_widths_training[i], 7, header, 1, 0, 'C', 1)
         pdf.ln()
 
-        # Data rows
         for index, row in training_plan_df.iterrows():
-            for i, col_name in enumerate(headers_training):
-                pdf.cell(col_widths_training[i], 7, str(row[col_name]), 1, 0, 'L') # 'L' für linksbündig
+            for i, col_name in enumerate(display_columns_training):
+                cell_content = str(row[col_name]) if pd.notna(row[col_name]) else ""
+                pdf.cell(col_widths_training[i], 7, cell_content, 1, 0, 'L')
             pdf.ln()
-        
-        # WICHTIG: Die Ausgabe sollte in 'latin-1' erfolgen, wenn Umlaute direkt ohne spezielle Font-Dateien verwendet werden
-        # oder 'utf-8' wenn der FPDF Font diese unterstützt und zuvor geladen wurde (z.B. DejaVuSans)
-        return pdf.output(dest='S').encode('latin-1') 
+
+        return bytes(pdf.output(dest='S'))
 
 
-    # Export-Button für PDF
-    if st.button("Trainingsplan als PDF exportieren"):
+    
+    st.markdown('<div class="versteckter-inhalt"></div>', unsafe_allow_html=True)
+
+
+   # Dies ist der Button, der die PDF-Generierung auslöst.
+    if st.button("Gesamten Bericht als PDF exportieren"):
+        selected_person_name = st.session_state.get('person_select_box', '')
+
         if selected_person_name:
-            pdf_output = create_training_report_pdf(
-                selected_person_name,
-                st.session_state['hf_zones_df'],
-                st.session_state['training_plan_df']
-            )
-            st.download_button(
-                label="PDF herunterladen",
-                data=pdf_output,
-                file_name=f"Trainingsplan_{selected_person_name.replace(' ', '_')}_{date.today().isoformat()}.pdf",
-                mime="application/pdf"
-            )
-            st.success("PDF-Bericht erfolgreich erstellt. Klicken Sie auf 'PDF herunterladen'.")
+            person_data_for_report = st.session_state.get('selected_person_full_data')
+            hf_zones_df_for_report = st.session_state.get('hf_zones_df')
+            training_plan_df_for_report = st.session_state.get('training_plan_df')
+            hf_graphic_buffer_for_report = st.session_state.get('hf_graphic_buffer')
+
+            # --- NEUE DEBUG-AUSGABEN HIER EINFÜGEN ---
+            # Diese Zuweisungen sind korrekt und sollten am Anfang stehen
+            ekg_data_for_report = st.session_state.get('current_ekg_data')
+            ekg_graphic_buffer_for_report = st.session_state.get('ekg_graphic_buffer')
+            ftp_data_for_report = st.session_state.get('current_ftp_data') 
+            ftp_graphic_buffer_for_report = st.session_state.get('ftp_graphic_buffer') 
+
+            import sys
+            import io # Stelle sicher, dass io importiert ist
+
+            print(f"\n--- EKG-Debugging vor PDF-Erstellung ---", file=sys.stderr)
+            print(f"ekg_data_for_report is None: {ekg_data_for_report is None}", file=sys.stderr)
+            # DIESE ZEILE IST DIE WICHTIGE ÄNDERUNG, die den AttributeError verhindert
+            if ekg_data_for_report is not None: 
+                print(f"ekg_data_for_report.empty: {ekg_data_for_report.empty}", file=sys.stderr)
+                if not ekg_data_for_report.empty:
+                    print(f"ekg_data_for_report columns: {ekg_data_for_report.columns.tolist()}", file=sys.stderr)
+                    print(f"ekg_data_for_report head:\n{ekg_data_for_report.head()}", file=sys.stderr)
+            # Die folgende Zeile ist redundant, da ekg_graphic_buffer_for_report schon oben zugewiesen wurde
+            # ekg_graphic_buffer_for_report = st.session_state.get('ekg_graphic_buffer') 
+            print(f"ekg_graphic_buffer_for_report is None: {ekg_graphic_buffer_for_report is None}", file=sys.stderr)
+            if ekg_graphic_buffer_for_report is not None:
+                try:
+                    current_pos = ekg_graphic_buffer_for_report.tell()
+                    ekg_graphic_buffer_for_report.seek(0, io.SEEK_END)
+                    buffer_size = ekg_graphic_buffer_for_report.tell()
+                    ekg_graphic_buffer_for_report.seek(current_pos) # Reset to original position
+                    print(f"ekg_graphic_buffer_for_report size: {buffer_size} bytes", file=sys.stderr)
+                except Exception as e:
+                    print(f"Could not determine EKG buffer size: {e}", file=sys.stderr)
+            print(f"--- Ende EKG-Debugging ---", file=sys.stderr)
+
+
+            print(f"\n--- FTP-Debugging vor PDF-Erstellung ---", file=sys.stderr)
+            print(f"ftp_data_for_report is None: {ftp_data_for_report is None}", file=sys.stderr)
+            # Auch hier die WICHTIGE ÄNDERUNG: if ftp_data_for_report is not None:
+            if ftp_data_for_report is not None:
+                print(f"ftp_data_for_report.empty: {ftp_data_for_report.empty}", file=sys.stderr)
+                if not ftp_data_for_report.empty:
+                    print(f"ftp_data_for_report columns: {ftp_data_for_report.columns.tolist()}", file=sys.stderr)
+                    print(f"ftp_data_for_report head:\n{ftp_data_for_report.head()}", file=sys.stderr)
+            print(f"ftp_graphic_buffer_for_report is None: {ftp_graphic_buffer_for_report is None}", file=sys.stderr)
+            if ftp_graphic_buffer_for_report is not None:
+                try:
+                    current_pos = ftp_graphic_buffer_for_report.tell()
+                    ftp_graphic_buffer_for_report.seek(0, io.SEEK_END)
+                    buffer_size = ftp_graphic_buffer_for_report.tell()
+                    ftp_graphic_buffer_for_report.seek(current_pos)
+                    print(f"ftp_graphic_buffer_for_report size: {buffer_size} bytes", file=sys.stderr)
+                except Exception as e:
+                    print(f"Could not determine FTP buffer size: {e}", file=sys.stderr)
+            print(f"--- Ende FTP-Debugging ---", file=sys.stderr)
+            # WICHTIG: Die PDF-Generierung wird nur gestartet, wenn eine Person ausgewählt ist.
+            # Fehlen andere Daten (EKG, FTP), werden diese im PDF als 'Nicht verfügbar' angezeigt.
+            if person_data_for_report:
+                pdf_output = create_training_report_pdf(
+                    person_data_for_report,
+                    hf_zones_df_for_report,
+                    training_plan_df_for_report,
+                    hf_graphic_buffer_for_report,
+                    ekg_data_for_report,
+                    ekg_graphic_buffer_for_report,
+                    ftp_data_for_report,
+                    ftp_graphic_buffer_for_report
+                )
+                
+                st.download_button(
+                    label="PDF jetzt herunterladen",
+                    data=pdf_output,
+                    file_name=f"Sporttest_Bericht_{selected_person_name.replace(' ', '_')}_{date.today().isoformat()}.pdf",
+                    mime="application/pdf"
+                )
+                st.success("PDF-Bericht erfolgreich erstellt. Klicken Sie auf 'PDF jetzt herunterladen', um die Datei zu speichern.")
+            else:
+                # Dies sollte nur sehr selten auftreten, wenn eine Person ausgewählt war,
+                # aber die Details plötzlich nicht mehr im Session State sind.
+                st.warning("Die Daten der ausgewählten Person konnten nicht geladen werden. Bitte versuchen Sie es erneut oder wählen Sie eine andere Person.")
         else:
-            st.warning("Bitte wählen Sie eine Person aus, um den Trainingsplan als PDF zu exportieren.")
-
-
+            st.warning("Bitte wählen Sie zuerst eine Person im Tab 'Daten' aus, um einen Bericht zu exportieren.")
 
 
 
