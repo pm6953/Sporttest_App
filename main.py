@@ -1031,8 +1031,13 @@ with tabs[3]:
             pdf.set_font("Arial", 'B', 12)
             pdf.cell(200, 10, txt="Auswertung FTP-Test:", ln=True, align="L")
             pdf.set_font("Arial", size=10)
-            for k, v in ftp_summary.items():
-                pdf.cell(200, 8, txt=f"{k}: {v}", ln=True)
+
+            if isinstance(ftp_summary, dict):
+                for k, v in ftp_summary.items():
+                    pdf.cell(200, 8, txt=f"{k}: {v}", ln=True)
+            else:
+                pdf.cell(200, 8, txt=str(ftp_summary), ln=True)
+
             pdf.ln(5)
 
             # FTP-Plot direkt darunter
