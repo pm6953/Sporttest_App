@@ -1049,7 +1049,10 @@ with tabs[3]:
 
         # WICHTIG: Die Ausgabe sollte in 'latin-1' erfolgen, wenn Umlaute direkt ohne spezielle Font-Dateien verwendet werden
         # oder 'utf-8' wenn der FPDF Font diese unterstützt und zuvor geladen wurde (z.B. DejaVuSans)
-        return bytes(pdf.output(dest='S'))
+        output = pdf.output(dest='S')
+        if isinstance(output, str):
+            return output.encode('latin-1')  # oder 'utf-8' falls dein PDF Unicode-Schrift nutzt
+        return bytes(output)
     
 
 
