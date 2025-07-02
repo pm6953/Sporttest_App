@@ -1060,47 +1060,18 @@ with tabs[3]:
             person_data = Person.find_person_data_by_name(selected_person_name)
             ftp_summary = {}
             ekg_summary = {}
+            ekg_plot_path = None
+            ftp_plot_path = None
 
-            # FTP-Auswertung laden
+            # === FTP-Auswertung ===
             ftp_tests = person_data.get("ftp_tests", [])
             if ftp_tests:
                 latest_ftp = sorted(ftp_tests, key=lambda x: x["id"], reverse=True)[0]
                 ftp_obj = FTP_Test(file_path=latest_ftp["result_link"])
-                ftp_summary = ftp_obj.get_summary()
+                result = ftp_obj.get_summary()
+                ftp_summary = result if isinstance(result, dict) else {"Hinweis": str(result)}
 
-            # EKG-Auswertung laden
-            ekg_tests = person_data.get("ekg_tests", [])
-            if ekg_tests:
-                latest_ekg = sorted(ekg_tests, key=lambda x: x["id"], reverse=True)[0]
-                ekg_obj = EKGdata.load_by_id(latest_ekg["id"], persons_list)
-                threshold = ekg_obj.auto_threshold()
-                bpm = ekg_obj.estimate_hr(threshold)
-                if bpm:
-                    ekg_summary = {"Herzfrequenz": f"{bpm} bpm"}
-            ekg_plot_path = None
-            ftp_plot_path = None
-
-            if ekg_tests:
-                latest_ekg = sorted(ekg_tests, key=lambda x: x["id"], reverse=True)[0]
-                ekg_obj = EKGdata.load_by_id(latest_ekg["id"], persons_list)
-                threshold = ekg_obj.auto_threshold()
-                bpm = ekg_obj.estimate_hr(threshold)
-                if bpm:
-                    ekg_summary = {"Geschätzte Herzfrequenz": f"{bpm} bpm"}
-
-                # EKG-Plot speichern
-                fig = ekg_obj.plot_time_series(threshold=threshold)
-                with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmpfile:
-                    fig.savefig(tmpfile.name)
-                    ekg_plot_path = tmpfile.name
-                    plt.close(fig)  # Speicher freigeben
-
-            if ftp_tests:
-                latest_ftp = sorted(ftp_tests, key=lambda x: x["id"], reverse=True)[0]
-                ftp_obj = FTP_Test(file_path=latest_ftp["result_link"])
-                ftp_summary = ftp_obj.get_summary()
-
-                # FTP-Plot speichern
+                # FTP-Plot
                 df = ftp_obj.get_dataframe()
                 if not df.empty:
                     start_time = df.index[0]
@@ -1122,6 +1093,24 @@ with tabs[3]:
                         ftp_plot_path = tmpfile.name
                         plt.close(fig)
 
+            # === EKG-Auswertung ===
+            ekg_tests = person_data.get("ekg_tests", [])
+            if ekg_tests:
+                latest_ekg = sorted(ekg_tests, key=lambda x: x["id"], reverse=True)[0]
+                ekg_obj = EKGdata.load_by_id(latest_ekg["id"], persons_list)
+                threshold = ekg_obj.auto_threshold()
+                bpm = ekg_obj.estimate_hr(threshold)
+                if bpm:
+                    ekg_summary = {"Herzfrequenz": f"{bpm} bpm"}
+
+                # EKG-Plot
+                fig = ekg_obj.plot_time_series(threshold=threshold)
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmpfile:
+                    fig.savefig(tmpfile.name)
+                    ekg_plot_path = tmpfile.name
+                    plt.close(fig)
+
+            # === PDF erzeugen ===
             pdf_output = create_training_report_pdf(
                 selected_person_name,
                 st.session_state['hf_zones_df'],
@@ -1135,16 +1124,10 @@ with tabs[3]:
 
             st.download_button(
                 label="PDF herunterladen",
-                data=pdf_output,
-                file_name=f"Trainingsplan_{selected_person_name.replace(' ', '_')}_{date.today().isoformat()}.pdf",
+                data=bytes(pdf_output),  # ← WICHTIG: falls pdf.output(dest="S") ein bytearray ist
+                file_name=f"Trainingsplan_{selected_person_name.replace(' ', '')}{date.today().isoformat()}.pdf",
                 mime="application/pdf"
             )
             st.success("PDF-Bericht erfolgreich erstellt. Klicken Sie auf 'PDF herunterladen'.")
         else:
             st.warning("Bitte wählen Sie eine Person aus, um den Trainingsplan als PDF zu exportieren.")
-
-
-
-
-
-
