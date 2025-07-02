@@ -65,16 +65,5 @@
                 "result_link": "data/Stufentest_data/6817599882_ACTIVITY.fit"
             }
         ]
-    },
-    {
-        "id": 4,
-        "firstname": "Max",
-        "lastname": "Mustermann",
-        "date_of_birth": "2025-06-28",
-        "gender": "male",
-        "address": "innrain 35",
-        "picture_path": "data/pictures/none.jpg",
-        "ruhe_ekg_file": "",
-        "ftp_test_file": ""
     }
 ]
