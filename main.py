@@ -891,7 +891,7 @@ with tabs[3]:
         num_rows="dynamic", # Ermöglicht das Hinzufügen/Löschen von Zeilen
         height=300,         # Feste Höhe für die Tabelle
         use_container_width=True, # Passt sich der Container-Breite an
-        # 'Notizen' aus column_order entfernt
+        
         column_order=("Tag", "Übung", "Dauer (Min.)", "Intensität"), 
         column_config={
             "Tag": st.column_config.Column(
@@ -920,7 +920,7 @@ with tabs[3]:
                 required=False,
                 width="small"
             )
-            # 'Notizen' aus column_config entfernt
+            
         }
     )
 
@@ -929,7 +929,9 @@ with tabs[3]:
 
 
     # Funktion zum Erzeugen des PDF-Berichts
-    def create_training_report_pdf(person_name, hf_zones_df, training_plan_df,ekg_summary, ftp_summary, person_data):
+    def create_training_report_pdf(person_name, hf_zones_df, training_plan_df, ekg_summary, ftp_summary, person_data, ekg_plot_path=None, ftp_plot_path=None):
+
+
         pdf = FPDF()
         pdf.add_page()
         # Setze einen Font, der Umlaute unterstützt (z.B. DejaVuSans-Bold oder Arial, wenn es kein Problem gibt)
@@ -988,8 +990,13 @@ with tabs[3]:
         # Passen Sie die Breiten entsprechend an die verbleibenden 4 Spalten an
         # Tag, Übung, Dauer (Min.), Intensität
         headers_training = training_plan_df.columns.tolist()
-        # Gleichmäßige Breiten für alle Spalten – anpassbar
-        col_widths_training = [pdf.w / len(headers_training) - 5] * len(headers_training)
+
+        # Verfügbare Breite korrekt berechnen
+        usable_width = pdf.w - pdf.l_margin - pdf.r_margin
+
+        # Gleichmäßige Spaltenbreiten
+        col_widths_training = [usable_width / len(headers_training)] * len(headers_training)
+
 
         pdf.set_fill_color(200, 220, 255) # Light blue background for header
         
@@ -1002,6 +1009,9 @@ with tabs[3]:
             for i, col_name in enumerate(headers_training):
                 pdf.cell(col_widths_training[i], 7, str(row[col_name]), 1, 0, 'L') # 'L' für linksbündig
             pdf.ln()
+
+        pdf.add_page()
+
         # Zusammenfassung EKG
         if ekg_summary:
             pdf.set_font("Arial", 'B', 12)
@@ -1009,7 +1019,12 @@ with tabs[3]:
             pdf.set_font("Arial", size=10)
             for k, v in ekg_summary.items():
                 pdf.cell(200, 8, txt=f"{k}: {v}", ln=True)
-            pdf.ln(10)
+            pdf.ln(5)
+
+            # EKG-Plot direkt darunter
+            if ekg_plot_path and os.path.exists(ekg_plot_path):
+                pdf.image(ekg_plot_path, x=10, w=180)
+                pdf.ln(10)
 
         # Zusammenfassung FTP
         if ftp_summary:
@@ -1018,6 +1033,14 @@ with tabs[3]:
             pdf.set_font("Arial", size=10)
             for k, v in ftp_summary.items():
                 pdf.cell(200, 8, txt=f"{k}: {v}", ln=True)
+            pdf.ln(5)
+
+            # FTP-Plot direkt darunter
+            if ftp_plot_path and os.path.exists(ftp_plot_path):
+                pdf.image(ftp_plot_path, x=10, w=180)
+                pdf.ln(10)
+
+       
 
         # WICHTIG: Die Ausgabe sollte in 'latin-1' erfolgen, wenn Umlaute direkt ohne spezielle Font-Dateien verwendet werden
         # oder 'utf-8' wenn der FPDF Font diese unterstützt und zuvor geladen wurde (z.B. DejaVuSans)
@@ -1048,6 +1071,50 @@ with tabs[3]:
                 bpm = ekg_obj.estimate_hr(threshold)
                 if bpm:
                     ekg_summary = {"Geschätzte Herzfrequenz": f"{bpm} bpm"}
+            ekg_plot_path = None
+            ftp_plot_path = None
+
+            if ekg_tests:
+                latest_ekg = sorted(ekg_tests, key=lambda x: x["id"], reverse=True)[0]
+                ekg_obj = EKGdata.load_by_id(latest_ekg["id"], persons_list)
+                threshold = ekg_obj.auto_threshold()
+                bpm = ekg_obj.estimate_hr(threshold)
+                if bpm:
+                    ekg_summary = {"Geschätzte Herzfrequenz": f"{bpm} bpm"}
+
+                # EKG-Plot speichern
+                fig = ekg_obj.plot_time_series(threshold=threshold)
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmpfile:
+                    fig.savefig(tmpfile.name)
+                    ekg_plot_path = tmpfile.name
+                    plt.close(fig)  # Speicher freigeben
+
+            if ftp_tests:
+                latest_ftp = sorted(ftp_tests, key=lambda x: x["id"], reverse=True)[0]
+                ftp_obj = FTP_Test(file_path=latest_ftp["result_link"])
+                ftp_summary = ftp_obj.get_summary()
+
+                # FTP-Plot speichern
+                df = ftp_obj.get_dataframe()
+                if not df.empty:
+                    start_time = df.index[0]
+                    df["minuten"] = (df.index - start_time).total_seconds() / 60
+                    fig, ax = plt.subplots(figsize=(10, 4))
+                    if "heart_rate" in df:
+                        ax.plot(df["minuten"], df["heart_rate"], label="Herzfrequenz", alpha=0.8)
+                    if "power" in df:
+                        ax.plot(df["minuten"], df["power"], label="Leistung", alpha=0.8)
+                    if "cadence" in df:
+                        ax.plot(df["minuten"], df["cadence"], label="Trittfrequenz", alpha=0.8)
+                    ax.set_xlabel("Zeit (Minuten)")
+                    ax.set_ylabel("Wert")
+                    ax.legend()
+                    ax.set_title("FTP-Test Verlauf")
+                    plt.tight_layout()
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmpfile:
+                        fig.savefig(tmpfile.name)
+                        ftp_plot_path = tmpfile.name
+                        plt.close(fig)
 
             pdf_output = create_training_report_pdf(
                 selected_person_name,
@@ -1055,8 +1122,11 @@ with tabs[3]:
                 st.session_state['training_plan_df'],
                 ekg_summary,
                 ftp_summary,
-                person_data
+                person_data,
+                ekg_plot_path=ekg_plot_path,
+                ftp_plot_path=ftp_plot_path
             )
+
             st.download_button(
                 label="PDF herunterladen",
                 data=pdf_output,
