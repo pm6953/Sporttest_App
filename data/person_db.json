@@ -22,7 +22,7 @@
         "ftp_tests": [
             
             {
-                "id": 3,
+                "id": 1,
                 "date": "2025-07-02",
                 "result_link": "data/Stufentest_data/FTP_File_1.fit"
                 }
@@ -51,7 +51,7 @@
                 "result_link": "data/Stufentest_data/FTP_File_1.fit"
             },
             {
-                "id": 4,
+                "id": 3,
                 "date": "2025-07-02",
                 "result_link": "data/Stufentest_data/FTP_File_2.fit"
             }
@@ -73,7 +73,7 @@
             }],
         "ftp_tests": [
                 {
-                    "id": 2,
+                    "id": 4,
                     "date": "2025-07-02",
                     "result_link": "data/Stufentest_data/FTP_File_1.fit"
                 }]
