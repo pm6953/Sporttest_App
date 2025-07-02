@@ -48,12 +48,12 @@
             {
                 "id": 2,
                 "date": "2025-07-02",
-                "result_link": "data/Stufentest_Data/FTP_File_1.fit"
+                "result_link": "data/Stufentest_data/FTP_File_1.fit"
             },
             {
                 "id": 4,
                 "date": "2025-07-02",
-                "result_link": "data/Stufentest_Data/FTP_File_2.fit"
+                "result_link": "data/Stufentest_data/FTP_File_2.fit"
             }
         ]
     },
@@ -75,7 +75,7 @@
                 {
                     "id": 2,
                     "date": "2025-07-02",
-                    "result_link": "data/Stufentest_Data/FTP_File_1.fit"
+                    "result_link": "data/Stufentest_data/FTP_File_1.fit"
                 }]
     }
 ]
