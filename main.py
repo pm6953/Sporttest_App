@@ -8,6 +8,7 @@ import os
 from datetime import date
 import pandas as pd
 import matplotlib.pyplot as plt 
+from fpdf import FPDF
 
 st.set_page_config(layout="centered") # Layout in der Mitte
 
