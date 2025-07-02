@@ -24,6 +24,16 @@
                 "id": 1,
                 "date": "2025-07-02",
                 "result_link": "C:\\Users\\gabse\\git\\Sporttest_App\\Sporttest_App\\data\\Stufentest_data\\FTP_File_1.fit"
+            },
+            {
+                "id": 3,
+                "date": "2025-07-02",
+                "result_link": "C:\\Users\\schra\\Prgrammierübung 2\\Sporttest_App\\Sporttest_App\\data\\Stufentest_data\\FTP_File_1.fit"
+            },
+            {
+                "id": 5,
+                "date": "2025-07-02",
+                "result_link": "C:\\Users\\schra\\Prgrammierübung 2\\Sporttest_App\\Sporttest_App\\data\\Stufentest_data\\FTP_File_1.fit"
             }
         ],
         "phone_number": "+4365077321"
@@ -48,6 +58,16 @@
                 "id": 2,
                 "date": "2025-07-02",
                 "result_link": "C:\\Users\\gabse\\git\\Sporttest_App\\Sporttest_App\\data\\Stufentest_Data\\FTP_File_2.fit"
+            },
+            {
+                "id": 4,
+                "date": "2025-07-02",
+                "result_link": "C:\\Users\\schra\\Prgrammierübung 2\\Sporttest_App\\Sporttest_App\\data\\Stufentest_Data\\FTP_File_2.fit"
+            },
+            {
+                "id": 6,
+                "date": "2025-07-02",
+                "result_link": "C:\\Users\\schra\\Prgrammierübung 2\\Sporttest_App\\Sporttest_App\\data\\Stufentest_Data\\FTP_File_2.fit"
             }
         ]
     },
