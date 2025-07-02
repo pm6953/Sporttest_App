@@ -1070,7 +1070,7 @@ with tabs[3]:
                 threshold = ekg_obj.auto_threshold()
                 bpm = ekg_obj.estimate_hr(threshold)
                 if bpm:
-                    ekg_summary = {"Geschätzte Herzfrequenz": f"{bpm} bpm"}
+                    ekg_summary = {"Herzfrequenz": f"{bpm} bpm"}
             ekg_plot_path = None
             ftp_plot_path = None
 
